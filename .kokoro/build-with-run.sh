@@ -22,6 +22,9 @@ _run_error_log() {
 
 trap '_run_error_log' ERR
 
+# Unsetting to use latest python 3 than python 2
+unset CLOUDSDK_PYTHON
+
 # Activate mocha config
 export MOCHA_REPORTER_OUTPUT=${PROJECT}_sponge_log.xml
 export MOCHA_REPORTER=xunit
@@ -114,17 +117,6 @@ export SERVICE_NAME="${SAMPLE_NAME}-${SUFFIX}"
 # Install dependencies and run Nodejs tests.
 export NODE_ENV=development
 npm install
-
-# If tests are running against main, configure FlakyBot
-# to open issues on failures:
-if [[ $KOKORO_BUILD_ARTIFACTS_SUBDIR = *"release"* ]]; then
-	export MOCHA_REPORTER_SUITENAME=${PROJECT}
-	notify_flakybot() {
-		chmod +x $KOKORO_GFILE_DIR/linux_amd64/flakybot
-		$KOKORO_GFILE_DIR/linux_amd64/flakybot
-	}
-	trap notify_flakybot EXIT HUP
-fi
 
 # Configure Cloud SQL variables for deploying idp-sql sample
 export DB_NAME="kokoro_ci"

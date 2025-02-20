@@ -15,7 +15,7 @@
 const assert = require('assert');
 const request = require('got');
 const {Logging} = require('@google-cloud/logging');
-const {exec} = require('child-process-promise');
+const {execSync} = require('child_process');
 const {GoogleAuth} = require('google-auth-library');
 const auth = new GoogleAuth();
 
@@ -47,11 +47,11 @@ const getLogEntriesPolling = async (filter, max_attempts) => {
 };
 
 const getLogEntries = async filter => {
+  console.debug(`Log filter: ${filter}`);
   const preparedFilter = `resource.type="cloud_run_revision" severity!="default" ${filter}  NOT protoPayload.serviceName="run.googleapis.com"`;
   const entries = await logging.getEntries({
     filter: preparedFilter,
     autoPaginate: false,
-    pageSize: 2,
   });
 
   return entries;
@@ -64,31 +64,6 @@ const dateMinutesAgo = (date, min_ago) => {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Run shell commands with retries and exponential backoff
-async function runShellCmd(cmd, opts = {}) {
-  const maxAttempts = opts.maxAttempts || 10;
-  let attempt = 0;
-  while (attempt < maxAttempts) {
-    try {
-      console.log('Running command:', cmd);
-      const result = await exec(cmd, opts);
-      return result;
-    } catch (err) {
-      console.log('Shell command failed!');
-      console.log('\tCommand:', cmd);
-      console.log('\tError:', err);
-      attempt += 1;
-
-      if (attempt < maxAttempts) {
-        // Exponential backoff
-        await sleep(attempt ** 2 * 1000);
-      } else {
-        throw err;
-      }
-    }
-  }
 }
 
 describe('Logging', () => {
@@ -120,17 +95,19 @@ describe('Logging', () => {
         `--substitutions _SERVICE=${SERVICE_NAME},_PLATFORM=${PLATFORM},_REGION=${REGION}`;
       if (SAMPLE_VERSION) buildCmd += `,_VERSION=${SAMPLE_VERSION}`;
 
-      console.log('Starting Cloud Build...');
-      runShellCmd(buildCmd, {timeout: 240000}); // timeout at 4 mins
-      console.log('Cloud Build completed.');
+      try {
+        console.log('Starting Cloud Build...');
+        execSync(buildCmd, {timeout: 240000}); // timeout at 4 mins
+        console.log('Cloud Build completed.');
+      } catch (err) {
+        console.error(err); // Ignore timeout error
+      }
 
       // Retrieve URL of Cloud Run service
-      const proc = await runShellCmd(
+      const url = execSync(
         `gcloud run services describe ${SERVICE_NAME} --project=${GOOGLE_CLOUD_PROJECT} ` +
           `--platform=${PLATFORM} --region=${REGION} --format='value(status.url)'`
       );
-      const url = proc.stdout;
-      console.log('Read URL:', url);
 
       BASE_URL = url.toString('utf-8').trim();
       if (!BASE_URL) throw Error('Cloud Run service URL not found');
@@ -149,9 +126,7 @@ describe('Logging', () => {
         `--substitutions _SERVICE=${SERVICE_NAME},_PLATFORM=${PLATFORM},_REGION=${REGION}`;
       if (SAMPLE_VERSION) cleanUpCmd += `,_VERSION=${SAMPLE_VERSION}`;
 
-      console.log('Cleaning up via Cloud Build.');
-      runShellCmd(cleanUpCmd);
-      console.log('Cleanup completed.');
+      execSync(cleanUpCmd);
     });
 
     it('can be reached by an HTTP request', async () => {
@@ -173,26 +148,28 @@ describe('Logging', () => {
       });
     });
 
-    it('generates Stackdriver logs', async () => {
+    it('generates Cloud Logging logs', async () => {
       // The latest two log entries for our service in the last 5 minutes
       // are treated as the result of the previous test.
       // Concurrency is supporting by distinctly named service deployment per test run.
       let entries;
       let attempt = 0;
-      const maxAttempts = 5;
+      const maxAttempts = 13;
+      // Filter by service name over the last 5 minutes
+      const filter = `resource.labels.service_name="${service_name}" timestamp>="${dateMinutesAgo(
+        new Date(),
+        5
+      )}"`;
       while ((!requestLog || !sampleLog) && attempt < maxAttempts) {
-        console.log(`Fetching logs, attempt #${attempt}`);
-        await sleep(attempt * 30000); // Linear backoff between retry attempts
-        // Filter by service name over the last 5 minutes
-        const filter = `resource.labels.service_name="${service_name}" timestamp>="${dateMinutesAgo(
-          new Date(),
-          5
-        )}"`;
+        console.log(`Polling for logs: attempt #${attempt + 1}`);
+        await sleep(attempt * 10000); // Linear backoff between retry attempts
         entries = await getLogEntriesPolling(filter);
+        console.log(`Found ${entries.length} log entries.`);
         entries.forEach(entry => {
+          console.debug(entry);
           if (entry.metadata.httpRequest) {
             requestLog = entry;
-          } else {
+          } else if (entry.data.message) {
             sampleLog = entry;
           }
         });

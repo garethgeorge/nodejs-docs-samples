@@ -26,7 +26,6 @@ const speech = require('@google-cloud/speech').v2;
 
 const {transcribeFileV2} = require('../transcribeFile.v2')
 
-const cwd = path.join(__dirname, '..');
 const text = 'how old is the Brooklyn Bridge';
 
 let recognizerName, projectId;
@@ -42,7 +41,7 @@ describe('Transcribing a local file (v2)', () => {
     console.error.restore();
   };
 
-  before(async ()=>{
+  before(async () => {
     const client = new speech.SpeechClient();
     projectId = await client.getProjectId();
 
@@ -65,7 +64,7 @@ describe('Transcribing a local file (v2)', () => {
 
   it('should transcribe a local file', async () => {
     await transcribeFileV2(recognizerName);
-    assert.include(console.log.firstCall.args, 'Transcript: how old is the Brooklyn Bridge')
+    assert.include(console.log.firstCall.args, `Transcript: ${text}`);
   });
 
   after(async ()=>{

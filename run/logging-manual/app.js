@@ -1,6 +1,16 @@
-// Copyright 2020 Google LLC. All rights reserved.
-// Use of this source code is governed by the Apache 2.0
-// license that can be found in the LICENSE file.
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 const express = require('express');
 const app = express();
@@ -9,7 +19,6 @@ app.get('/', (req, res) => {
   const project = process.env.GOOGLE_CLOUD_PROJECT;
 
   // [START cloudrun_manual_logging]
-  // [START run_manual_logging]
 
   // Uncomment and populate this variable in your code:
   // const project = 'The project ID of your function or Cloud Run service';
@@ -23,9 +32,8 @@ app.get('/', (req, res) => {
     const traceHeader = req.header('X-Cloud-Trace-Context');
     if (traceHeader && project) {
       const [trace] = traceHeader.split('/');
-      globalLogFields[
-        'logging.googleapis.com/trace'
-      ] = `projects/${project}/traces/${trace}`;
+      globalLogFields['logging.googleapis.com/trace'] =
+        `projects/${project}/traces/${trace}`;
     }
   }
 
@@ -43,7 +51,6 @@ app.get('/', (req, res) => {
   // Serialize to a JSON string and output.
   console.log(JSON.stringify(entry));
 
-  // [END run_manual_logging]
   // [END cloudrun_manual_logging]
 
   res.send('Hello Logger!');
